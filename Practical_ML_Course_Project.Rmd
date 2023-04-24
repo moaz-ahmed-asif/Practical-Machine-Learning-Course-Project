@@ -1,0 +1,152 @@
+---
+title: "Human Activity Recognition - Weight Lifting Exercises (HAR - WLE)"
+author: "Md. Moaz Ahmed Asif"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include = F}
+knitr::opts_chunk$set(echo = T, warning = F, message = F, out.width = "100%")
+```
+
+## Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement -- a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website [here](http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+## Data Processing
+
+The training data for this project are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv) & the test data are available [here](https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv) and read by the read.csv() function. The data for this project come from [here](http://groupware.les.inf.puc-rio.br/har).
+
+```{r, cache = T}
+training_raw <- read.csv("./data/pml-training.csv", header = T); dim(training_raw)
+testing_raw <- read.csv("./data/pml-testing.csv", header = T); dim(testing_raw)
+head(colnames(training_raw), 10)
+```
+
+The first 7 columns are ID and time variables. So, we do not need them for analysis.
+
+```{r}
+training_raw <- training_raw[, -c(1:7)]; dim(training_raw)
+testing_raw <- testing_raw[, -c(1:7)]; dim(testing_raw)
+```
+
+Up next, the libraries needed for analysis are loaded.
+
+```{r, cache = T}
+library(caret)
+library(kernlab)
+library(rpart)
+library(ggplot2)
+library(randomForest)
+library(rattle)
+library(Metrics)
+```
+
+Next, near zero variance variables are removed from the training data set and also from the testing data set.
+
+```{r, cache = T}
+NZV_train <- nearZeroVar(training_raw)
+training_raw <- training_raw[, -NZV_train]; dim(training_raw)
+NZV_test <- nearZeroVar(testing_raw)
+testing_raw <- testing_raw[, -NZV_test]; dim(testing_raw)
+```
+
+At last, NA values are removed.
+
+```{r, cache = T}
+training_raw <- training_raw[, colSums(is.na(training_raw)) == 0]; dim(training_raw)
+testing_raw <- testing_raw[, colSums(is.na(testing_raw)) == 0]; dim(testing_raw)
+```
+
+## Data Analysis
+
+For cross-validation, a sub-training data set and a validation data set are created by splitting the training data into a 70:30 ratio.
+
+```{r, cache = T}
+set.seed(123321) 
+inTrain <- createDataPartition(training_raw$classe, p = 0.7, list = F)
+training_Data <- training_raw[inTrain, ]; dim(training_Data)
+validation_Data <- training_raw[-inTrain, ]; dim(validation_Data)
+```
+
+## Creating and Testing the Models
+
+Decision Tree, Random Forrest, Gradient Boosted Machine (GBM), Support Vector Machine (SVM), and Linear Discriminant Analysis (LDA) models were created and tested. Now, let's set up a control for the sub-training data set to use cross-validation.
+
+```{r, cache = T}
+control <- trainControl(method = "repeatedcv", number = 3, repeats = 5, verboseIter = F)
+```
+
+### Decision Tree Model
+
+```{r, cache = T}
+dec_tree_model <- train(classe ~., data = training_Data, method = "rpart", trControl = control, tuneLength = 5)
+fancyRpartPlot(dec_tree_model$finalModel, sub = "Decision Tree Model")
+pred_dec_tree <- predict(dec_tree_model, validation_Data)
+confusionMatrix(pred_dec_tree, reference = factor(validation_Data$classe))
+```
+So, the out of sample error for this model will be:
+```{r, cache = T}
+1-as.numeric(confusionMatrix(pred_dec_tree, reference = factor(validation_Data$classe))$overall["Accuracy"])
+```
+
+### Random Forrest Model
+
+```{r, cache = T}
+rf_model <- train(classe ~., data = training_Data, method = "rf", trControl = control, tuneLength = 5)
+pred_rf <- predict(rf_model, validation_Data)
+confusionMatrix(pred_rf, reference = factor(validation_Data$classe))
+```
+So, the out of sample error for this model will be:
+```{r, cache = T}
+1-as.numeric(confusionMatrix(pred_rf, reference = factor(validation_Data$classe))$overall["Accuracy"])
+```
+
+### Gradient Boosted Machine (GBM) Model
+
+```{r, cache = T, results = 'hide'}
+gbm_model <- train(classe ~., data = training_Data, method = "gbm", trControl = control, tuneLength = 5)
+```
+```{r, cache = T}
+pred_gbm <- predict(gbm_model, validation_Data)
+confusionMatrix(pred_gbm, reference = factor(validation_Data$classe))
+```
+So, the out of sample error for this model will be:
+```{r, cache = T}
+1-as.numeric(confusionMatrix(pred_gbm, reference = factor(validation_Data$classe))$overall["Accuracy"])
+```
+
+### Support Vector Machine (SVM) Model
+
+```{r, cache = T}
+svm_model <- train(classe ~., data = training_Data, method = "svmLinear", trControl = control, tuneLength = 5)
+pred_svm <- predict(svm_model, validation_Data)
+confusionMatrix(pred_svm, reference = factor(validation_Data$classe))
+```
+So, the out of sample error for this model will be:
+```{r, cache = T}
+1-as.numeric(confusionMatrix(pred_svm, reference = factor(validation_Data$classe))$overall["Accuracy"])
+```
+
+### Linear Discriminant Analysis (LDA) Model
+
+```{r, cache = T}
+lda_model <- train(classe ~., data = training_Data, method = "lda", trControl = control, tuneLength = 5)
+pred_lda <- predict(lda_model, validation_Data)
+confusionMatrix(pred_lda, reference = factor(validation_Data$classe))
+```
+So, the out of sample error for this model will be:
+```{r, cache = T}
+1-as.numeric(confusionMatrix(pred_lda, reference = factor(validation_Data$classe))$overall["Accuracy"])
+```
+
+## Result of the analysis
+
+The Random Forrest Model showed better accuracy & lower out of sample error than the other models. So, the Random Forrest Model will be used to predict the testing data set.
+
+```{r, cache = T}
+pred_test <- predict(rf_model, testing_raw)
+pred_test
+```
